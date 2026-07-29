@@ -37,20 +37,24 @@
          R = FIELD(M, CURSES.VM, 2)
          B = FIELD(M, CURSES.VM, 3)
          E = FIELD(M, CURSES.VM, 4)
-         IF (E = "DOWN" OR E = "DRAG") AND R > 3 AND R <= H THEN
-            BEGIN CASE
-            CASE B = "LEFT"   ; CL = "BRIGHT GREEN"
-            CASE B = "RIGHT"  ; CL = "BRIGHT RED"
-            CASE B = "MIDDLE" ; CL = "BRIGHT YELLOW"
-            CASE 1            ; CL = "BRIGHT CYAN"
-            END CASE
-            PX = C - 1 ; PY = R - 1 ; PC = CL ; PS = "O" ; GOSUB PUT
+         * ignore pointer-only motion (no button) — it fires on every pixel
+         * of movement and would spam the status line; act on clicks/drags
+         IF E # "MOVE" THEN
+            IF (E = "DOWN" OR E = "DRAG") AND R > 3 AND R <= H THEN
+               BEGIN CASE
+               CASE B = "LEFT"   ; CL = "BRIGHT GREEN"
+               CASE B = "RIGHT"  ; CL = "BRIGHT RED"
+               CASE B = "MIDDLE" ; CL = "BRIGHT YELLOW"
+               CASE 1            ; CL = "BRIGHT CYAN"
+               END CASE
+               PX = C - 1 ; PY = R - 1 ; PC = CL ; PS = "O" ; GOSUB PUT
+            END
+            JUNK = CALLC CURSMOVE((H - 1) : " 2")
+            JUNK = CALLC CURSCOLOR("OFF")
+            JUNK = CALLC CURSCLREOL("")
+            JUNK = CALLC CURSADDSTR("last: " : C : "," : R : "  " : B : "  " : E)
+            JUNK = CALLC CURSREFRESH("")
          END
-         JUNK = CALLC CURSMOVE((H - 1) : " 2")
-         JUNK = CALLC CURSCOLOR("OFF")
-         JUNK = CALLC CURSCLREOL("")
-         JUNK = CALLC CURSADDSTR("last: " : C : "," : R : "  " : B : "  " : E)
-         JUNK = CALLC CURSREFRESH("")
       END
    REPEAT
 
