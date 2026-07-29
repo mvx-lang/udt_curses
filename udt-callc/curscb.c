@@ -15,7 +15,8 @@
  * terminals (xterm/tmux/ssh); ncurses is not.  These wrappers are
  * compiled into libu2callc.so and declared in cfuncdef, so BASIC can
  * drive a full-screen ncurses session and — the point of the exercise —
- * read keys by logical NAME the way MVX's KEYIN() does.
+ * read keys by logical NAME the way MVX's KEYIN() does, with colour,
+ * cursor control and mouse to match MVX's COLOR()/@(...)/MOUSE().
  *
  * CallC convention (see the git bindings alongside these): every
  * argument and every return value is a string (char *).  Integers travel
@@ -30,6 +31,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 /* Scratch for string returns.  A CallC return is copied out immediately by
  * the caller, so a single static buffer per return is safe (BASIC is
@@ -38,9 +40,11 @@ static char g_ret[128];
 
 /* Last mouse event, decoded by CURSKEY when it sees KEY_MOUSE and read back
  * by CURSMOUSE — mirrors MVX, where KEYIN() yields "MOUSE" and MOUSE()
- * returns the coordinates. */
-static int g_m_col = 0, g_m_row = 0;
-static char g_m_evt[16] = "";
+ * returns col/row/button/event. */
+static int  g_m_col = 0, g_m_row = 0;
+static char g_m_btn[8] = "NONE";   /* LEFT / MIDDLE / RIGHT / NONE */
+static char g_m_evt[8] = "";       /* DOWN / UP / DRAG / CLICK / MOVE / WHEELUP / WHEELDN */
+static int  g_m_down = 0;          /* a button is currently held (to tell DRAG from MOVE) */
 
 /* ---- capability probe ------------------------------------------------ *
  * Safe to call without a terminal: returns the ncurses version string,
@@ -54,11 +58,81 @@ char *CURSVER(char *a)
 	return g_ret;
 }
 
+/* ---- colour ---------------------------------------------------------- *
+ * Colour pairs are allocated on demand and cached, so we never exceed the
+ * terminal's COLOR_PAIRS and callers name colours, not pair numbers.  A
+ * default (terminal) background is fg/bg = -1 via use_default_colors(). */
+static short g_pair[81];           /* cache keyed by (fg+1)*9+(bg+1), fg/bg in -1..7 */
+static int   g_npair = 0;
+
+static int color_of(const char *n)
+{
+	if (!strcmp(n, "BLACK"))   return COLOR_BLACK;
+	if (!strcmp(n, "RED"))     return COLOR_RED;
+	if (!strcmp(n, "GREEN"))   return COLOR_GREEN;
+	if (!strcmp(n, "YELLOW"))  return COLOR_YELLOW;
+	if (!strcmp(n, "BLUE"))    return COLOR_BLUE;
+	if (!strcmp(n, "MAGENTA")) return COLOR_MAGENTA;
+	if (!strcmp(n, "CYAN"))    return COLOR_CYAN;
+	if (!strcmp(n, "WHITE"))   return COLOR_WHITE;
+	return -1;                 /* unknown -> default */
+}
+
+static short pair_for(int fg, int bg)
+{
+	int key = (fg + 1) * 9 + (bg + 1);
+	if (key < 0 || key >= (int)(sizeof g_pair / sizeof g_pair[0])) return 0;
+	if (g_pair[key]) return g_pair[key];
+	if (g_npair + 1 >= COLOR_PAIRS) return 0;   /* out of pairs -> default */
+	g_npair++;
+	init_pair((short)g_npair, (short)fg, (short)bg);
+	g_pair[key] = (short)g_npair;
+	return g_pair[key];
+}
+
+/* Parse a colour spec — "GREEN", "WHITE BLUE" (fg bg), "BRIGHT GREEN",
+ * "OFF"/"NORMAL"/"" — into a curses attribute. */
+static chtype attr_of(const char *spec)
+{
+	char buf[64], *tok, *save = NULL;
+	int fg = -1, bg = -1, seen = 0, bold = 0;
+
+	if (!spec || !*spec) return A_NORMAL;
+	snprintf(buf, sizeof buf, "%s", spec);
+	for (char *p = buf; *p; p++) *p = (char)toupper((unsigned char)*p);
+	if (!strcmp(buf, "OFF") || !strcmp(buf, "NORMAL")) return A_NORMAL;
+
+	for (tok = strtok_r(buf, " ", &save); tok; tok = strtok_r(NULL, " ", &save)) {
+		if (!strcmp(tok, "BRIGHT") || !strcmp(tok, "BOLD")) { bold = 1; continue; }
+		if (seen == 0)      { fg = color_of(tok); seen = 1; }
+		else if (seen == 1) { bg = color_of(tok); seen = 2; }
+	}
+	return COLOR_PAIR(pair_for(fg, bg)) | (bold ? A_BOLD : 0);
+}
+
+/* CURSCOLOR("GREEN") / "WHITE BLUE" (fg bg) / "BRIGHT GREEN" / "OFF".
+ * Sets the attributes used by subsequent CURSADDSTR — like MVX COLOR(). */
+char *CURSCOLOR(char *spec)
+{
+	attrset(attr_of(spec));
+	return "";
+}
+
+/* Set the screen background (colour used to fill on clear, and behind text
+ * with no explicit colour) — like MVX's back-colour-erase, e.g. a full blue
+ * field.  Takes the same spec as CURSCOLOR. */
+char *CURSBKGD(char *spec)
+{
+	bkgd(' ' | attr_of(spec));
+	return "";
+}
+
 /* ---- screen lifecycle ------------------------------------------------ */
 
 /* Enter curses mode: character-at-a-time, no echo, keypad decoding (so the
  * arrows/function keys arrive as KEY_* rather than raw escape sequences),
- * and mouse reporting.  nonl() keeps Enter distinct from newline. */
+ * mouse reporting, and colour if the terminal has it.  nonl() keeps Enter
+ * distinct from newline. */
 char *CURSINIT(char *a)
 {
 	(void)a;
@@ -68,6 +142,12 @@ char *CURSINIT(char *a)
 	nonl();
 	keypad(stdscr, TRUE);
 	mousemask(ALL_MOUSE_EVENTS | REPORT_MOUSE_POSITION, NULL);
+	if (has_colors()) {
+		start_color();
+		use_default_colors();
+	}
+	g_npair = 0;
+	memset(g_pair, 0, sizeof g_pair);
 	refresh();
 	return "";
 }
@@ -88,6 +168,13 @@ char *CURSDIM(char *a)
 	(void)a;
 	snprintf(g_ret, sizeof g_ret, "%d %d", LINES, COLS);
 	return g_ret;
+}
+
+/* Cursor visibility: "0" hide, "1" normal, "2" very visible (block). */
+char *CURSCURSOR(char *n)
+{
+	curs_set(n ? atoi(n) : 1);
+	return "";
 }
 
 /* ---- output ---------------------------------------------------------- */
@@ -117,6 +204,14 @@ char *CURSCLEAR(char *a)
 	return "";
 }
 
+/* Clear from the cursor to the end of the line — like MVX's @(-4). */
+char *CURSCLREOL(char *a)
+{
+	(void)a;
+	clrtoeol();
+	return "";
+}
+
 /* Flush buffered output to the terminal. */
 char *CURSREFRESH(char *a)
 {
@@ -124,6 +219,8 @@ char *CURSREFRESH(char *a)
 	refresh();
 	return "";
 }
+
+/* ---- input ----------------------------------------------------------- */
 
 /* Set the read timeout for CURSKEY, in milliseconds: a non-negative value
  * waits up to that long and then yields "" (no key); "-1" blocks until a key
@@ -134,11 +231,10 @@ char *CURSTIMEOUT(char *ms)
 	return "";
 }
 
-/* ---- input ----------------------------------------------------------- *
- * One decoded keystroke as a logical NAME, matching MVX's KEYIN():
+/* One decoded keystroke as a logical NAME, matching MVX's KEYIN():
  *   - printable ASCII returns as itself ("a", "Z", "7", " ");
  *   - named specials return their name (UP, F3, ENTER, ESC, ...);
- *   - a mouse event returns "MOUSE"; the coordinates are then read with
+ *   - a mouse event returns "MOUSE"; the details are then read with
  *     CURSMOUSE, exactly as MVX pairs KEYIN()=="MOUSE" with MOUSE().
  * An empty return means "no key" (ERR / timeout). */
 static void set_ret(const char *s) { snprintf(g_ret, sizeof g_ret, "%s", s); }
@@ -178,12 +274,16 @@ char *CURSKEY(char *a)
 		if (getmouse(&ev) == OK) {
 			g_m_col = ev.x + 1;   /* 1-based for BASIC, like MVX */
 			g_m_row = ev.y + 1;
-			if      (ev.bstate & BUTTON1_PRESSED)  strcpy(g_m_evt, "DOWN");
-			else if (ev.bstate & BUTTON1_RELEASED) strcpy(g_m_evt, "UP");
-			else if (ev.bstate & BUTTON1_CLICKED)  strcpy(g_m_evt, "CLICK");
+			if      (ev.bstate & (BUTTON1_PRESSED|BUTTON1_RELEASED|BUTTON1_CLICKED)) strcpy(g_m_btn, "LEFT");
+			else if (ev.bstate & (BUTTON2_PRESSED|BUTTON2_RELEASED|BUTTON2_CLICKED)) strcpy(g_m_btn, "MIDDLE");
+			else if (ev.bstate & (BUTTON3_PRESSED|BUTTON3_RELEASED|BUTTON3_CLICKED)) strcpy(g_m_btn, "RIGHT");
+
+			if      (ev.bstate & (BUTTON1_PRESSED|BUTTON2_PRESSED|BUTTON3_PRESSED))    { strcpy(g_m_evt, "DOWN"); g_m_down = 1; }
+			else if (ev.bstate & (BUTTON1_RELEASED|BUTTON2_RELEASED|BUTTON3_RELEASED)) { strcpy(g_m_evt, "UP");   g_m_down = 0; }
+			else if (ev.bstate & (BUTTON1_CLICKED|BUTTON2_CLICKED|BUTTON3_CLICKED))    strcpy(g_m_evt, "CLICK");
 			else if (ev.bstate & BUTTON4_PRESSED)  strcpy(g_m_evt, "WHEELUP");
 			else if (ev.bstate & BUTTON5_PRESSED)  strcpy(g_m_evt, "WHEELDN");
-			else                                   strcpy(g_m_evt, "MOVE");
+			else { strcpy(g_m_evt, g_m_down ? "DRAG" : "MOVE"); if (!g_m_down) strcpy(g_m_btn, "NONE"); }
 		}
 		break;
 	}
@@ -198,11 +298,13 @@ char *CURSKEY(char *a)
 	return g_ret;
 }
 
-/* Coordinates of the last mouse event seen by CURSKEY, as
- * "col<VM>row<VM>evt" (VM = CHAR(253)), matching MVX's MOUSE(). */
+/* The last mouse event seen by CURSKEY, as "col<VM>row<VM>button<VM>event"
+ * (VM = CHAR(253)) — matching MVX's MOUSE(): button is LEFT/MIDDLE/RIGHT/
+ * NONE, event is DOWN/UP/DRAG/CLICK/MOVE/WHEELUP/WHEELDN. */
 char *CURSMOUSE(char *a)
 {
 	(void)a;
-	snprintf(g_ret, sizeof g_ret, "%d\xFD%d\xFD%s", g_m_col, g_m_row, g_m_evt);
+	snprintf(g_ret, sizeof g_ret, "%d\xFD%d\xFD%s\xFD%s",
+	         g_m_col, g_m_row, g_m_btn, g_m_evt);
 	return g_ret;
 }

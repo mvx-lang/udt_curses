@@ -16,13 +16,24 @@
 *   CALLC CURSINIT("")        enter curses mode (raw keys, no echo, mouse)
 *   CALLC CURSEND("")         leave curses mode, restore the terminal
 *   CALLC CURSDIM("")         "rows cols" of the screen
+*   CALLC CURSCURSOR("0")     cursor visibility: "0" hide, "1" normal
+*   CALLC CURSCOLOR(spec)     set text colour (see below); like MVX COLOR()
+*   CALLC CURSBKGD(spec)      set the screen background (back-colour-erase)
 *   CALLC CURSMOVE("r c")     move the cursor (0-based row/col)
 *   CALLC CURSADDSTR(text)    write text at the cursor
 *   CALLC CURSCLEAR("")       clear the screen (shown at next refresh)
+*   CALLC CURSCLREOL("")      clear from the cursor to end of line
 *   CALLC CURSREFRESH("")     flush output to the terminal
 *   CALLC CURSTIMEOUT("ms")   read timeout for CURSKEY; "-1" blocks
 *   CALLC CURSKEY("")         one keystroke as a logical NAME (see below)
-*   CALLC CURSMOUSE("")       last mouse event: col : @VM : row : @VM : evt
+*   CALLC CURSMOUSE("")       last mouse event:
+*                               col : @VM : row : @VM : button : @VM : event
+*                             button LEFT/MIDDLE/RIGHT/NONE, event as below
+*
+* ---- colour spec (CURSCOLOR / CURSBKGD) -------------------------------
+* A colour name, optionally a background, optionally BRIGHT:
+*   "GREEN"   "WHITE BLUE" (fg bg)   "BRIGHT GREEN"   "BLACK CYAN"   "OFF"
+* Colours: BLACK RED GREEN YELLOW BLUE MAGENTA CYAN WHITE.  "OFF" resets.
 *
 * ---- key names returned by CURSKEY ------------------------------------
 * Printable characters return as themselves.  Named keys, matching MVX's
@@ -30,6 +41,6 @@
 *   UP DOWN LEFT RIGHT  HOME END  PGUP PGDN  INS DEL  BS  TAB BTAB
 *   ENTER  ESC  F1..F12  MOUSE
 * An empty return means no key within the timeout.  "MOUSE" means a mouse
-* event arrived; read the coordinates with CURSMOUSE.  Its evt field is one
-* of DOWN UP CLICK MOVE WHEELUP WHEELDN.
+* event arrived; read it with CURSMOUSE.  Its event field is one of
+* DOWN UP DRAG CLICK MOVE WHEELUP WHEELDN.
    EQU CURSES.VM TO CHAR(253)

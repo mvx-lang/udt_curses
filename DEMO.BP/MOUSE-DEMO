@@ -1,0 +1,67 @@
+* MOUSE-DEMO — draw with the mouse, using udt_curses (ncurses via CallC).
+* Copyright (C) 2026 Gordon Heydon.  GPL-2.0-only.
+*
+* Ported from the MVX example: click or drag and it paints markers where
+* the pointer goes, coloured by button; the status line echoes the
+* coordinates.  Press q (or ESC) to quit.  CURSKEY yields "MOUSE" and
+* CURSMOUSE carries col : row : button : event (event DOWN / UP / DRAG),
+* matching MVX's KEYIN()=="MOUSE" paired with MOUSE().
+*
+*   BASIC DEMO.BP MOUSE-DEMO ; CATALOG DEMO.BP MOUSE-DEMO LOCAL FORCE
+*   RUN DEMO.BP MOUSE-DEMO
+*
+   $INCLUDE BP CURSES.INS
+   IF NOT(CURSES.AVAIL("")) THEN
+      CRT "udt_curses is not installed on this account."
+      STOP
+   END
+   JUNK = CALLC CURSINIT("")
+   JUNK = CALLC CURSCURSOR("0")
+   JUNK = CALLC CURSCLEAR("")
+   DIM = CALLC CURSDIM("")
+   H = FIELD(DIM, " ", 1)
+   W = FIELD(DIM, " ", 2)
+   PX = 2 ; PY = 0 ; PC = "BRIGHT WHITE" ; PS = "udt_curses mouse demo" ; GOSUB PUT
+   PX = 2 ; PY = 1 ; PC = "OFF"
+   PS = "Click or drag to draw (left/middle/right).  Press q to quit."
+   GOSUB PUT
+   JUNK = CALLC CURSREFRESH("")
+   JUNK = CALLC CURSTIMEOUT("-1")
+
+   LOOP
+      K = CALLC CURSKEY("")
+   UNTIL K = "q" OR K = "Q" OR K = "ESC" DO
+      IF K = "MOUSE" THEN
+         M = CALLC CURSMOUSE("")
+         C = FIELD(M, CURSES.VM, 1)
+         R = FIELD(M, CURSES.VM, 2)
+         B = FIELD(M, CURSES.VM, 3)
+         E = FIELD(M, CURSES.VM, 4)
+         IF (E = "DOWN" OR E = "DRAG") AND R > 3 AND R <= H THEN
+            BEGIN CASE
+            CASE B = "LEFT"   ; CL = "BRIGHT GREEN"
+            CASE B = "RIGHT"  ; CL = "BRIGHT RED"
+            CASE B = "MIDDLE" ; CL = "BRIGHT YELLOW"
+            CASE 1            ; CL = "BRIGHT CYAN"
+            END CASE
+            PX = C - 1 ; PY = R - 1 ; PC = CL ; PS = "O" ; GOSUB PUT
+         END
+         JUNK = CALLC CURSMOVE((H - 1) : " 2")
+         JUNK = CALLC CURSCOLOR("OFF")
+         JUNK = CALLC CURSCLREOL("")
+         JUNK = CALLC CURSADDSTR("last: " : C : "," : R : "  " : B : "  " : E)
+         JUNK = CALLC CURSREFRESH("")
+      END
+   REPEAT
+
+   JUNK = CALLC CURSCURSOR("1")
+   JUNK = CALLC CURSEND("")
+   CRT "thanks for clicking"
+   STOP
+
+* ---- move to (PX,PY), set colour PC, write PS -------------------------
+PUT:
+   JUNK = CALLC CURSMOVE(PY : " " : PX)
+   JUNK = CALLC CURSCOLOR(PC)
+   JUNK = CALLC CURSADDSTR(PS)
+   RETURN

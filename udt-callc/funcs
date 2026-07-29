@@ -2,9 +2,13 @@ CURSVER:string:1:string
 CURSINIT:string:1:string
 CURSEND:string:1:string
 CURSDIM:string:1:string
+CURSCURSOR:string:1:string
+CURSCOLOR:string:1:string
+CURSBKGD:string:1:string
 CURSMOVE:string:1:string
 CURSADDSTR:string:1:string
 CURSCLEAR:string:1:string
+CURSCLREOL:string:1:string
 CURSREFRESH:string:1:string
 CURSTIMEOUT:string:1:string
 CURSKEY:string:1:string

@@ -1,2 +1,3 @@
-# BASIC source held as records without a file extension (BP items).
+# BASIC source held as records without a file extension (BP / DEMO.BP items).
 BP/* linguist-language=BASIC
+DEMO.BP/* linguist-language=BASIC

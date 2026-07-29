@@ -1,0 +1,128 @@
+* SNAKE — Snake for UniData, drawn with udt_curses (ncurses via CallC).
+* Copyright (C) 2026 Gordon Heydon.  GPL-2.0-only.
+*
+* Ported from the MVX example: arrows steer; eating food grows the snake
+* and speeds the game; walls and your own tail end it; q or ESC quit.  The
+* game tick is a timed CURSKEY; the body is a dynamic array.  Where MVX has
+* KEYIN(), @(x,y) and COLOR() built in, here they are curses CallC calls.
+*
+*   BASIC DEMO.BP SNAKE ; CATALOG DEMO.BP SNAKE LOCAL FORCE ; RUN DEMO.BP SNAKE
+*
+   $INCLUDE BP CURSES.INS
+   IF NOT(CURSES.AVAIL("")) THEN
+      CRT "udt_curses is not installed on this account."
+      STOP
+   END
+   JUNK = CALLC CURSINIT("")
+   JUNK = CALLC CURSCURSOR("0")
+   JUNK = CALLC CURSCLEAR("")
+   DIM = CALLC CURSDIM("")
+   H = FIELD(DIM, " ", 1)
+   W = FIELD(DIM, " ", 2)
+   TOP = 1
+   BOT = H - 2
+   SCORE = 0
+   DX = 1 ; DY = 0
+   HX = INT(W / 2) ; HY = INT(H / 2)
+   BODY = ""
+   FOR I = 0 TO 3
+      BODY<-1> = (HX - I) : "," : HY
+   NEXT I
+   * draw the initial snake
+   N = DCOUNT(BODY, @AM)
+   FOR I = 2 TO N
+      P = BODY<I>
+      PX = FIELD(P, ",", 1) ; PY = FIELD(P, ",", 2) ; PC = "GREEN" ; PS = "o"
+      GOSUB PUT
+   NEXT I
+   PX = HX ; PY = HY ; PC = "BRIGHT GREEN" ; PS = "@" ; GOSUB PUT
+   GOSUB FOOD.PLACE
+   GOSUB SCORE.BAR
+   JUNK = CALLC CURSREFRESH("")
+
+   LOOP
+      TICK = 130 - SCORE * 3
+      IF TICK < 45 THEN TICK = 45
+      JUNK = CALLC CURSTIMEOUT(TICK)
+      K = CALLC CURSKEY("")
+      BEGIN CASE
+      CASE K = "q" OR K = "ESC" ; GOTO 500
+      CASE K = "UP"    ; IF DY # 1 THEN DX = 0 ; DY = -1
+      CASE K = "DOWN"  ; IF DY # -1 THEN DX = 0 ; DY = 1
+      CASE K = "LEFT"  ; IF DX # 1 THEN DX = -1 ; DY = 0
+      CASE K = "RIGHT" ; IF DX # -1 THEN DX = 1 ; DY = 0
+      END CASE
+      NX = HX + DX ; NY = HY + DY
+      IF NX < 0 OR NX > W - 1 OR NY < TOP OR NY > BOT THEN GOTO 400
+      NP = NX : "," : NY
+      * would the head hit the body?
+      HIT = 0
+      NB = DCOUNT(BODY, @AM)
+      FOR I = 1 TO NB
+         IF BODY<I> = NP THEN HIT = 1
+      NEXT I
+      IF HIT THEN GOTO 400
+      * old head becomes body
+      PX = HX ; PY = HY ; PC = "GREEN" ; PS = "o" ; GOSUB PUT
+      BODY = INSERT(BODY, 1, 0, 0, NP)
+      HX = NX ; HY = NY
+      PX = HX ; PY = HY ; PC = "BRIGHT GREEN" ; PS = "@" ; GOSUB PUT
+      IF NP = FOOD THEN
+         SCORE = SCORE + 1
+         GOSUB FOOD.PLACE
+         GOSUB SCORE.BAR
+      END ELSE
+         N = DCOUNT(BODY, @AM)
+         TP = BODY<N>
+         PX = FIELD(TP, ",", 1) ; PY = FIELD(TP, ",", 2) ; PC = "OFF" ; PS = " "
+         GOSUB PUT
+         BODY = DELETE(BODY, N, 0, 0)
+      END
+      JUNK = CALLC CURSREFRESH("")
+   REPEAT
+
+400 * game over
+   MSG = "  GAME  OVER  -  score " : SCORE : "  -  any key  "
+   PX = INT((W - LEN(MSG)) / 2) ; PY = INT(H / 2) ; PC = "WHITE RED" ; PS = MSG
+   GOSUB PUT
+   JUNK = CALLC CURSREFRESH("")
+   JUNK = CALLC CURSTIMEOUT("-1")
+   K = CALLC CURSKEY("")
+
+500 * leave
+   JUNK = CALLC CURSCOLOR("OFF")
+   JUNK = CALLC CURSCURSOR("1")
+   JUNK = CALLC CURSEND("")
+   CRT "final score: " : SCORE
+   STOP
+
+* ---- move to (PX,PY), set colour PC, write PS -------------------------
+PUT:
+   JUNK = CALLC CURSMOVE(PY : " " : PX)
+   JUNK = CALLC CURSCOLOR(PC)
+   JUNK = CALLC CURSADDSTR(PS)
+   RETURN
+
+* ---- place food off the snake -----------------------------------------
+FOOD.PLACE:
+   LOOP
+      FX = RND(W)
+      FY = RND(BOT - TOP + 1) + TOP
+      FP = FX : "," : FY
+      ONS = 0
+      NB = DCOUNT(BODY, @AM)
+      FOR I = 1 TO NB
+         IF BODY<I> = FP THEN ONS = 1
+      NEXT I
+   UNTIL ONS = 0 DO REPEAT
+   FOOD = FP
+   PX = FX ; PY = FY ; PC = "BRIGHT RED" ; PS = "*" ; GOSUB PUT
+   RETURN
+
+* ---- score bar --------------------------------------------------------
+SCORE.BAR:
+   PX = 0 ; PY = 0 ; PC = "BLACK GREEN"
+   PS = "  SNAKE   score " : SCORE : "   arrows steer, q quits" : STR(" ", W)
+   PS = PS[1, W]
+   GOSUB PUT
+   RETURN

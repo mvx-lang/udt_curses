@@ -22,12 +22,15 @@ A handful of CallC entry points, driven from BASIC:
 | `CALLC CURSINIT("")` | enter curses mode (raw keys, no echo, mouse on) |
 | `CALLC CURSEND("")` | leave curses mode, restore the terminal |
 | `CALLC CURSDIM("")` | `"rows cols"` of the screen |
+| `CALLC CURSCURSOR("0")` | cursor visibility (`"0"` hide, `"1"` normal) |
+| `CALLC CURSCOLOR(spec)` | text colour — `"GREEN"`, `"WHITE BLUE"`, `"BRIGHT GREEN"`, `"OFF"` |
+| `CALLC CURSBKGD(spec)` | screen background (back-colour-erase) |
 | `CALLC CURSMOVE("r c")` | move the cursor (0-based) |
 | `CALLC CURSADDSTR(t)` | write text at the cursor |
-| `CALLC CURSCLEAR("")` / `CURSREFRESH("")` | clear / flush |
+| `CALLC CURSCLEAR("")` / `CURSCLREOL("")` / `CURSREFRESH("")` | clear screen / clear to EOL / flush |
 | `CALLC CURSTIMEOUT("ms")` | read timeout for the next key (`"-1"` blocks) |
 | `CALLC CURSKEY("")` | one keystroke, as a **logical name** |
-| `CALLC CURSMOUSE("")` | last mouse event: `col : @VM : row : @VM : evt` |
+| `CALLC CURSMOUSE("")` | last mouse event: `col : @VM : row : @VM : button : @VM : event` |
 
 `CURSKEY` returns printable characters as themselves and named keys as
 `UP DOWN LEFT RIGHT HOME END PGUP PGDN INS DEL BS TAB BTAB ENTER ESC
@@ -57,6 +60,26 @@ belongs in the package manager, available to every installed package.
 
 See [`BP/CURSES.DEMO`](BP/CURSES.DEMO) for a complete probe-then-drive
 example.
+
+## Demos
+
+`DEMO.BP/` holds the MVX terminal demos ported to the curses API — the same
+programs, with `KEYIN()`/`@(x,y)`/`COLOR()`/`MOUSE()` swapped for the
+`CALLC CURS…` calls:
+
+- **[SNAKE](DEMO.BP/SNAKE)** — arrows steer, food grows and speeds the
+  snake, walls or your tail end it. Timed `CURSKEY`, colour, dynamic-array
+  body.
+- **[FSDEMO](DEMO.BP/FSDEMO)** — Midnight-Commander dress: cyan menu bar,
+  blue field, function-key bar. Exercises HOME/END/PGUP/PGDN and colour.
+- **[MOUSE-DEMO](DEMO.BP/MOUSE-DEMO)** — click or drag to draw, coloured by
+  button; the status line echoes col/row/button/event.
+
+```
+:CREATE.FILE DIR DEMO.BP
+:BASIC DEMO.BP SNAKE
+:RUN DEMO.BP SNAKE
+```
 
 ## Install
 
@@ -108,6 +131,7 @@ BP/CALLC.EXISTS     generic "is this CallC function registered?" probe
 BP/CURSES.AVAIL     "is udt_curses installed?" (wraps CALLC.EXISTS)
 BP/CURSES.INS       $INCLUDE: DEFFUN declarations + the API reference
 BP/CURSES.DEMO      worked example: probe, then a live key/mouse screen
+DEMO.BP/            the MVX terminal demos ported: SNAKE, FSDEMO, MOUSE-DEMO
 PKG                 package descriptor (mv-package)
 ```
 

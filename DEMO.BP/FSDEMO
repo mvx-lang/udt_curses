@@ -1,0 +1,88 @@
+* FSDEMO — full-screen demo for UniData, drawn with udt_curses.
+* Copyright (C) 2026 Gordon Heydon.  GPL-2.0-only.
+*
+* Ported from the MVX example: a Midnight-Commander dress — cyan menu bar,
+* blue field, black-on-cyan marker, MC-style function-key bar.  Arrows
+* move; HOME centres, END right edge, PGUP/PGDN page; q or ESC quit.  It
+* exercises the named function/navigation keys and colour that a real
+* full-screen app (an editor, a menu) needs.
+*
+*   BASIC DEMO.BP FSDEMO ; CATALOG DEMO.BP FSDEMO LOCAL FORCE ; RUN DEMO.BP FSDEMO
+*
+   $INCLUDE BP CURSES.INS
+   IF NOT(CURSES.AVAIL("")) THEN
+      CRT "udt_curses is not installed on this account."
+      STOP
+   END
+   JUNK = CALLC CURSINIT("")
+   JUNK = CALLC CURSCURSOR("0")
+   JUNK = CALLC CURSBKGD("WHITE BLUE")      ;* the blue field, back-colour-erase
+   JUNK = CALLC CURSCLEAR("")
+   DIM = CALLC CURSDIM("")
+   H = FIELD(DIM, " ", 1)
+   W = FIELD(DIM, " ", 2)
+   X = INT(W / 2) ; Y = INT(H / 2) ; K = ""
+
+   LOOP
+      DIM = CALLC CURSDIM("")
+      H = FIELD(DIM, " ", 1)
+      W = FIELD(DIM, " ", 2)
+      IF X > W - 1 THEN X = W - 1
+      IF Y > H - 3 THEN Y = H - 3
+      * menu bar, MC style
+      HDR = "  Left     File     Command     Options     Right"
+      HDR = HDR : STR(" ", 60) : "pos " : X : "," : Y : "  key " : K
+      HDR = (HDR : STR(" ", W))[1, W]
+      JUNK = CALLC CURSMOVE("0 0")
+      JUNK = CALLC CURSCOLOR("BLACK CYAN")
+      JUNK = CALLC CURSADDSTR(HDR)
+      * the marker, drawn like an MC selection
+      JUNK = CALLC CURSMOVE(Y : " " : X)
+      JUNK = CALLC CURSCOLOR("BLACK CYAN")
+      JUNK = CALLC CURSADDSTR("X")
+      * function-key bar
+      JUNK = CALLC CURSMOVE((H - 1) : " 0")
+      VIS = 0
+      NUMS = " 1" ; LBL = "Help  " ; GOSUB FKEY
+      NUMS = " 4" ; LBL = "PgUp  " ; GOSUB FKEY
+      NUMS = " 5" ; LBL = "PgDn  " ; GOSUB FKEY
+      NUMS = " 6" ; LBL = "Home  " ; GOSUB FKEY
+      NUMS = " 7" ; LBL = "End  "  ; GOSUB FKEY
+      NUMS = " q" ; LBL = "Quit"    ; GOSUB FKEY
+      PAD = W - 1 - VIS
+      IF PAD < 0 THEN PAD = 0
+      JUNK = CALLC CURSCOLOR("BLACK CYAN")
+      JUNK = CALLC CURSADDSTR(STR(" ", PAD))
+      JUNK = CALLC CURSREFRESH("")
+      K = CALLC CURSKEY("")
+   UNTIL K = "q" OR K = "ESC" DO
+      * erase the old marker back to the blue field
+      JUNK = CALLC CURSMOVE(Y : " " : X)
+      JUNK = CALLC CURSCOLOR("WHITE BLUE")
+      JUNK = CALLC CURSADDSTR(" ")
+      BEGIN CASE
+      CASE K = "UP"    ; IF Y > 1 THEN Y = Y - 1
+      CASE K = "DOWN"  ; IF Y < H - 3 THEN Y = Y + 1
+      CASE K = "LEFT"  ; IF X > 0 THEN X = X - 1
+      CASE K = "RIGHT" ; IF X < W - 1 THEN X = X + 1
+      CASE K = "HOME"  ; X = INT(W / 2) ; Y = INT(H / 2)
+      CASE K = "END"   ; X = W - 1
+      CASE K = "PGUP"  ; Y = Y - (H - 4) ; IF Y < 1 THEN Y = 1
+      CASE K = "PGDN"  ; Y = Y + (H - 4) ; IF Y > H - 3 THEN Y = H - 3
+      END CASE
+   REPEAT
+
+   JUNK = CALLC CURSCOLOR("OFF")
+   JUNK = CALLC CURSCURSOR("1")
+   JUNK = CALLC CURSEND("")
+   CRT "bye"
+   STOP
+
+* ---- append one MC-style function-key segment -------------------------
+FKEY:
+   JUNK = CALLC CURSCOLOR("WHITE BLACK")
+   JUNK = CALLC CURSADDSTR(NUMS)
+   JUNK = CALLC CURSCOLOR("BLACK CYAN")
+   JUNK = CALLC CURSADDSTR(LBL)
+   VIS = VIS + LEN(NUMS) + LEN(LBL)
+   RETURN
