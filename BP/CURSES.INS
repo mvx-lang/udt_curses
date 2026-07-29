@@ -1,0 +1,35 @@
+* CURSES.INS — udt_curses BASIC API.  Copyright (C) 2026 Gordon Heydon.
+* GPL-2.0-only.  $INCLUDE this at the top of a program to use the bridge.
+*
+*   $INCLUDE BP CURSES.INS
+*
+* ---- availability -----------------------------------------------------
+* Always safe to call, whether or not the bridge is installed:
+   DEFFUN CALLC.EXISTS(A)
+   DEFFUN CURSES.AVAIL(A)
+*
+* ---- native entry points (CallC) --------------------------------------
+* These are only safe to call once CURSES.AVAIL() has returned 1.  Each
+* takes exactly one string argument (ignored where noted) and returns a
+* string.  Call them directly, e.g.  K = CALLC CURSKEY("")
+*
+*   CALLC CURSINIT("")        enter curses mode (raw keys, no echo, mouse)
+*   CALLC CURSEND("")         leave curses mode, restore the terminal
+*   CALLC CURSDIM("")         "rows cols" of the screen
+*   CALLC CURSMOVE("r c")     move the cursor (0-based row/col)
+*   CALLC CURSADDSTR(text)    write text at the cursor
+*   CALLC CURSCLEAR("")       clear the screen (shown at next refresh)
+*   CALLC CURSREFRESH("")     flush output to the terminal
+*   CALLC CURSTIMEOUT("ms")   read timeout for CURSKEY; "-1" blocks
+*   CALLC CURSKEY("")         one keystroke as a logical NAME (see below)
+*   CALLC CURSMOUSE("")       last mouse event: col : @VM : row : @VM : evt
+*
+* ---- key names returned by CURSKEY ------------------------------------
+* Printable characters return as themselves.  Named keys, matching MVX's
+* KEYIN():
+*   UP DOWN LEFT RIGHT  HOME END  PGUP PGDN  INS DEL  BS  TAB BTAB
+*   ENTER  ESC  F1..F12  MOUSE
+* An empty return means no key within the timeout.  "MOUSE" means a mouse
+* event arrived; read the coordinates with CURSMOUSE.  Its evt field is one
+* of DOWN UP CLICK MOVE WHEELUP WHEELDN.
+   EQU CURSES.VM TO CHAR(253)

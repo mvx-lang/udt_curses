@@ -1,0 +1,15 @@
+FUNCTION CURSES.AVAIL(DUMMY)
+* udt_curses — Copyright (C) 2026 Gordon Heydon.  GPL-2.0-only.
+*
+* CURSES.AVAIL() — 1 if the ncurses bridge is installed, else 0.  Wraps the
+* generic CALLC.EXISTS probe against the bridge's entry point.  Use it to
+* guard curses code:
+*
+*    DEFFUN CURSES.AVAIL(A)
+*    IF CURSES.AVAIL("") THEN
+*       GOSUB FULLSCREEN.UI
+*    END ELSE
+*       GOSUB PLAIN.UI          ;* works on any account
+*    END
+   DEFFUN CALLC.EXISTS(A)
+   RETURN CALLC.EXISTS("CURSINIT")

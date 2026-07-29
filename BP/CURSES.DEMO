@@ -1,0 +1,55 @@
+* CURSES.DEMO — udt_curses worked example.  Copyright (C) 2026 Gordon
+* Heydon.  GPL-2.0-only.
+*
+* Shows the intended shape of a udt_curses program: probe for the bridge,
+* and only then drive the full-screen UI.  On an account without the bridge
+* it prints a plain message instead of aborting.
+*
+*   BASIC BP CURSES.DEMO
+*   RUN BP CURSES.DEMO
+*
+   $INCLUDE BP CURSES.INS
+
+   IF NOT(CURSES.AVAIL("")) THEN
+      CRT "udt_curses is not installed on this account — running plain."
+      CRT "(install it with the package manager to get full-screen mode)"
+      STOP
+   END
+
+   JUNK = CALLC CURSINIT("")
+   JUNK = CALLC CURSTIMEOUT("10000")      ;* 10s idle timeout
+
+   DIM = CALLC CURSDIM("")
+   ROWS = FIELD(DIM, " ", 1)
+   COLS = FIELD(DIM, " ", 2)
+
+   JUNK = CALLC CURSCLEAR("")
+   JUNK = CALLC CURSMOVE("0 2")
+   JUNK = CALLC CURSADDSTR("udt_curses — ncurses terminal handling for UniData")
+   JUNK = CALLC CURSMOVE("1 2")
+   JUNK = CALLC CURSADDSTR("screen ":ROWS:"x":COLS:"   press keys, click the mouse, q to quit")
+   JUNK = CALLC CURSREFRESH("")
+
+   LINE = 3
+   LOOP
+      K = CALLC CURSKEY("")
+   UNTIL K = "q" OR K = "ESC" DO
+      IF K # "" THEN
+         SHOW = K
+         IF K = "MOUSE" THEN
+            M = CALLC CURSMOUSE("")
+            SHOW = "MOUSE col=":FIELD(M,CURSES.VM,1):" row=":FIELD(M,CURSES.VM,2):" ":FIELD(M,CURSES.VM,3)
+         END
+         IF LINE >= ROWS - 1 THEN
+            JUNK = CALLC CURSCLEAR("")
+            LINE = 3
+         END
+         JUNK = CALLC CURSMOVE(LINE:" 4")
+         JUNK = CALLC CURSADDSTR("key: ":SHOW:"        ")
+         JUNK = CALLC CURSREFRESH("")
+         LINE = LINE + 1
+      END
+   REPEAT
+
+   JUNK = CALLC CURSEND("")
+   CRT "done."

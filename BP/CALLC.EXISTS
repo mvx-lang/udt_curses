@@ -1,0 +1,26 @@
+FUNCTION CALLC.EXISTS(FNAME)
+* udt_curses — Copyright (C) 2026 Gordon Heydon.  GPL-2.0-only.
+*
+* CALLC.EXISTS(name) — 1 if the CallC function `name` is registered with
+* this UniData, else 0, WITHOUT invoking it.  A CallC to an unregistered
+* function aborts the whole program, so a live probe is impossible; instead
+* this reads the canonical CallC definition that the package installer
+* maintains ($UDTHOME/bin/work/cfuncdef).
+*
+* The point is optional native capability: a program can ask whether an
+* add-on like udt_curses is present and light up the better path when it is,
+* falling back cleanly when it is not — the same binary runs on a plain
+* account and on one where the ncurses bridge is installed.  Ship this with
+* the package manager so every installed package can rely on it.
+   FOUND = 0
+   UDT = GETENV("UDTHOME")
+   IF UDT # "" THEN
+      OSREAD DEF FROM UDT : "/bin/work/cfuncdef" ELSE DEF = ""
+      NL = DCOUNT(DEF, CHAR(10))
+      I = 1
+      LOOP WHILE I <= NL AND FOUND = 0 DO
+         IF FIELD(FIELD(DEF, CHAR(10), I), ":", 1) = FNAME THEN FOUND = 1
+         I = I + 1
+      REPEAT
+   END
+   RETURN FOUND
