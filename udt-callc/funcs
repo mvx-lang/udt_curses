@@ -1,0 +1,11 @@
+CURSVER:string:1:string
+CURSINIT:string:1:string
+CURSEND:string:1:string
+CURSDIM:string:1:string
+CURSMOVE:string:1:string
+CURSADDSTR:string:1:string
+CURSCLEAR:string:1:string
+CURSREFRESH:string:1:string
+CURSTIMEOUT:string:1:string
+CURSKEY:string:1:string
+CURSMOUSE:string:1:string

@@ -77,16 +77,19 @@ then catalog the BASIC API into each account that uses it:
 :CATALOG BP CURSES.AVAIL LOCAL FORCE
 ```
 
-The installer rebuilds the **shared** `libu2callc.so` that every UniData
-session loads, preserving any other CallC add-ons whose objects are
-already staged in the work directory (e.g. the git bridge). Coordinating
-several packages' native objects into that one library is the package
-manager's role; this script covers udt_curses on its own or beside
-objects already present.
+UniData loads exactly one `libu2callc.so`, so native add-ons cannot each
+own it — they are aggregated. `install.sh` stages this package's
+contribution (`udt-callc/`) into `$UDTHOME/callc.d/curses/` and then
+rebuilds the shared library from **every** contribution present, so
+installing curses never clobbers another add-on (e.g. the git bridge) and
+removing `callc.d/curses` + rebuilding drops it cleanly. The package
+manager ([mv_package](https://github.com/mvx-lang/mv_package)) does the
+same staging and rebuild when it installs the package — this script is the
+standalone path.
 
 ## How it works
 
-`src/curscb.c` wraps ncurses (`initscr`, `getch` with `keypad`,
+`udt-callc/curscb.c` wraps ncurses (`initscr`, `getch` with `keypad`,
 `getmouse`, …) as CallC functions. UniData's CallC marshals every
 argument and return value as a string, so integers travel as text and
 `CURSKEY` returns the decoded key *name* rather than a raw byte (binary
@@ -98,14 +101,20 @@ UniData's built-in handling is not.
 ## Layout
 
 ```
-src/curscb.c     the ncurses CallC bridge (C)
-install.sh       build + install into libu2callc.so
-BP/CALLC.EXISTS  generic "is this CallC function registered?" probe
-BP/CURSES.AVAIL  "is udt_curses installed?" (wraps CALLC.EXISTS)
-BP/CURSES.INS    $INCLUDE: DEFFUN declarations + the API reference
-BP/CURSES.DEMO   worked example: probe, then a live key/mouse screen
-PKG              package descriptor (mv-package)
+udt-callc/curscb.c  the ncurses CallC bridge (C)
+udt-callc/funcs     this package's cfuncdef fragment (its CallC declarations)
+install.sh          stage udt-callc/ into $UDTHOME/callc.d and rebuild the lib
+BP/CALLC.EXISTS     generic "is this CallC function registered?" probe
+BP/CURSES.AVAIL     "is udt_curses installed?" (wraps CALLC.EXISTS)
+BP/CURSES.INS       $INCLUDE: DEFFUN declarations + the API reference
+BP/CURSES.DEMO      worked example: probe, then a live key/mouse screen
+PKG                 package descriptor (mv-package)
 ```
+
+The `udt-callc/` directory is the package's native contribution in the
+form mv_package's UniData builder consumes: C sources (or pre-built
+objects for a binary release), a `funcs` cfuncdef fragment, and an
+optional `libs` line of extra linker flags.
 
 ## Status
 
