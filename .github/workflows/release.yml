@@ -1,28 +1,71 @@
 # Release udt_curses on a version tag: build the per-arch UniData binary (the
-# ncurses CallC bridge, compiled on a licensed UniData install) plus a portable
-# source tar, and publish both to the package registry.
+# ncurses CallC bridge, curscb.c -> curscb.o) and publish it as a GitHub
+# release asset.  The package registry indexes the asset via its release
+# webhook (it hosts nothing).
 # Copyright (C) 2026 Gordon Heydon.  GPL-2.0-only.
 #
-# Tag with the bare version to release, e.g.:
-#     git tag 1.0 && git push origin 1.0
-# The build runs on the registry's self-hosted RedHat/Rocky runner (label
-# `udt`) via the shared reusable workflow — nothing UniData-specific lives here.
+# Tag the bare version to release, e.g.:  git tag 0.1 && git push origin 0.1
+# Runs the udt-builder container (ncurses-devel + gcc) on the self-hosted
+# RedHat/Rocky runner (label `udt`).
 name: release
 
 on:
   push:
     tags:
-      - "[0-9]+.[0-9]+*"        # bare version tags: 1.0, 1.1, 2.0.1, ...
+      - "[0-9]+.[0-9]+*"
+
+permissions:
+  contents: write
 
 jobs:
-  release:
-    uses: mvx-lang/mv-package-registry/.github/workflows/udt-release.yml@main
-    with:
-      package_repo: ${{ github.repository }}
-      package_ref: ${{ github.ref_name }}
-      name: mv-lang/curses
-      version: ${{ github.ref_name }}
-      description: "ncurses terminal handling for UniData (KEYIN by name, mouse)"
-      license: GPL-2.0-only
-    secrets:
-      MVPKG_PUBLISH_TOKEN: ${{ secrets.MVPKG_PUBLISH_TOKEN }}
+  build:
+    runs-on: [self-hosted, linux, udt]
+    steps:
+      - name: Check out udt_curses
+        uses: actions/checkout@v4
+
+      - name: Build the ncurses CallC bridge in the udt-builder container
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="${UDT_BUILDER_IMAGE:-udt-builder:8.3.2}"
+          if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+            echo "::error::udt-builder image '$IMAGE' not on this runner." >&2; exit 1
+          fi
+          VER="${GITHUB_REF_NAME}"
+          ARCH="$(uname -m)"; OS="$(uname -s | tr 'A-Z' 'a-z')"; case "$OS" in *linux*) OS=linux ;; esac
+          case "$(printf '\1\2' | od -An -tx2 | tr -d ' \n')" in
+            0201*) ENDIAN=le ;; 0102*) ENDIAN=be ;; *) ENDIAN=le ;;
+          esac
+          # Native code -> os+arch-locked binary; name mirrors the registry key
+          # (base = package name with '/'->'_') so the release webhook maps it.
+          BASE="mv-lang_curses-$VER-udt-$OS-$ARCH-$ENDIAN"
+          # Compile udt-callc/*.c -> .o in a staged copy and drop the .c (the
+          # client links the object without a compiler), then tar the package.
+          docker run --rm -e BASE="$BASE" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+            -v "$PWD":/src -w /src "$IMAGE" bash -lc '
+              set -e
+              rm -rf /tmp/stage && mkdir -p /tmp/stage
+              cp -a . /tmp/stage/ && rm -rf /tmp/stage/.git /tmp/stage/.github
+              for c in /tmp/stage/udt-callc/*.c; do gcc -m64 -fPIC -O2 -c "$c" -o "${c%.c}.o"; rm -f "$c"; done
+              tar czf "/src/$BASE.tar.gz" -C /tmp/stage .
+              chown "$HOST_UID:$HOST_GID" "/src/$BASE.tar.gz"
+            '
+          test -f "$BASE.tar.gz"
+          sha256sum "$BASE.tar.gz" > "$BASE.tar.gz.sha256"
+          echo "tarball=$BASE.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "checksum=$BASE.tar.gz.sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: udt-curses ${{ github.ref_name }}
+          body: |
+            UniData build of udt_curses (the ncurses CallC bridge) for this
+            runner's system/arch.  The package registry indexes this asset.
+          files: |
+            ${{ steps.build.outputs.tarball }}
+            ${{ steps.build.outputs.checksum }}
+          fail_on_unmatched_files: true
