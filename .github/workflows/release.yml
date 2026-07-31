@@ -1,0 +1,28 @@
+# Release udt_curses on a version tag: build the per-arch UniData binary (the
+# ncurses CallC bridge, compiled on a licensed UniData install) plus a portable
+# source tar, and publish both to the package registry.
+# Copyright (C) 2026 Gordon Heydon.  GPL-2.0-only.
+#
+# Tag with the bare version to release, e.g.:
+#     git tag 1.0 && git push origin 1.0
+# The build runs on the registry's self-hosted RedHat/Rocky runner (label
+# `udt`) via the shared reusable workflow — nothing UniData-specific lives here.
+name: release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+*"        # bare version tags: 1.0, 1.1, 2.0.1, ...
+
+jobs:
+  release:
+    uses: mvx-lang/mv-package-registry/.github/workflows/udt-release.yml@main
+    with:
+      package_repo: ${{ github.repository }}
+      package_ref: ${{ github.ref_name }}
+      name: mv-lang/curses
+      version: ${{ github.ref_name }}
+      description: "ncurses terminal handling for UniData (KEYIN by name, mouse)"
+      license: GPL-2.0-only
+    secrets:
+      MVPKG_PUBLISH_TOKEN: ${{ secrets.MVPKG_PUBLISH_TOKEN }}
