@@ -1,12 +1,16 @@
-# Release udt_curses on a version tag: build the per-arch UniData binary (the
-# ncurses CallC bridge, curscb.c -> curscb.o) and publish it as a GitHub
-# release asset.  The package registry indexes the asset via its release
-# webhook (it hosts nothing).
+# Release udt_curses on a version tag: publish the source package and the
+# per-arch UniData binary (the ncurses CallC bridge, curscb.c -> curscb.o) as
+# GitHub release assets.  The package registry indexes them via its release
+# webhook (it hosts nothing).  Asset names mirror the registry's artifact key
+# (<name>-<ver>-<suffix>, base = package name '/'->'_'):
+#   source                      -> mv-lang_curses-<ver>-source.tar.gz
+#   udt binary (linux/x86_64,le)-> mv-lang_curses-<ver>-udt-linux-x86_64-le.tar.gz
 # Copyright (C) 2026 Gordon Heydon.  GPL-2.0-only.
 #
+# udt_curses is UniData-only (ncurses via CallC), so there is no mvx binary.
 # Tag the bare version to release, e.g.:  git tag 0.1 && git push origin 0.1
-# Runs the udt-builder container (ncurses-devel + gcc) on the self-hosted
-# RedHat/Rocky runner (label `udt`).
+# The binary builds in the udt-builder container (ncurses-devel + gcc) on the
+# self-hosted RedHat/Rocky runner (label `udt`).
 name: release
 
 on:
@@ -18,7 +22,38 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  # ---- source package: BASIC + the CallC bridge source (builds on install) ---
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package the source
+        id: pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${GITHUB_REF_NAME}"
+          BASE="mv-lang_curses-$VER-source"
+          tar czf "/tmp/$BASE.tar.gz" --exclude='./.git' --exclude='./.github' .
+          mv "/tmp/$BASE.tar.gz" .
+          sha256sum "$BASE.tar.gz" > "$BASE.tar.gz.sha256"
+          echo "tarball=$BASE.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "checksum=$BASE.tar.gz.sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the source asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: udt-curses ${{ github.ref_name }}
+          body: "udt_curses — ncurses terminal handling for UniData. Source + prebuilt udt binary; indexed by the package registry."
+          files: |
+            ${{ steps.pkg.outputs.tarball }}
+            ${{ steps.pkg.outputs.checksum }}
+          fail_on_unmatched_files: true
+
+  # ---- udt binary: the compiled ncurses CallC bridge -------------------------
+  udt-binary:
     runs-on: [self-hosted, linux, udt]
     steps:
       - name: Check out udt_curses
@@ -57,14 +92,10 @@ jobs:
           echo "tarball=$BASE.tar.gz" >> "$GITHUB_OUTPUT"
           echo "checksum=$BASE.tar.gz.sha256" >> "$GITHUB_OUTPUT"
 
-      - name: Publish the GitHub release
+      - name: Publish the udt binary asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: udt-curses ${{ github.ref_name }}
-          body: |
-            UniData build of udt_curses (the ncurses CallC bridge) for this
-            runner's system/arch.  The package registry indexes this asset.
           files: |
             ${{ steps.build.outputs.tarball }}
             ${{ steps.build.outputs.checksum }}
