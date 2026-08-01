@@ -26,7 +26,7 @@ jobs:
   source:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Package the source
         id: pkg
@@ -42,7 +42,7 @@ jobs:
           echo "checksum=$BASE.tar.gz.sha256" >> "$GITHUB_OUTPUT"
 
       - name: Publish the source asset
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: udt-curses ${{ github.ref_name }}
@@ -57,7 +57,7 @@ jobs:
     runs-on: [self-hosted, linux, udt]
     steps:
       - name: Check out udt_curses
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Build the ncurses CallC bridge in the udt-builder container
         id: build
@@ -93,7 +93,7 @@ jobs:
           echo "checksum=$BASE.tar.gz.sha256" >> "$GITHUB_OUTPUT"
 
       - name: Publish the udt binary asset
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           files: |
