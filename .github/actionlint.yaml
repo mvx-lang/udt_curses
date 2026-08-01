@@ -1,0 +1,4 @@
+# The udt-binary job runs on the licensed self-hosted UniData build host.
+self-hosted-runner:
+  labels:
+    - udt

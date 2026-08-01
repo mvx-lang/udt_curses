@@ -34,50 +34,13 @@ jobs:
           body: "udt_curses — ncurses terminal handling for UniData. Source + prebuilt udt binary; indexed by the package registry."
 
   # ---- udt binary: the compiled ncurses CallC bridge -------------------------
+  # Builds in the licensed udt-builder container on the self-hosted `udt` runner.
+  # The shared udt-build action does the scaffolding (image check, artifact key,
+  # container run, tar, publish); build-udt.sh stages this package's release.
   udt-binary:
     runs-on: [self-hosted, linux, udt]
     steps:
-      - name: Check out udt_curses
-        uses: actions/checkout@v5
-
-      - name: Build the ncurses CallC bridge in the udt-builder container
-        id: build
-        shell: bash
-        run: |
-          set -euo pipefail
-          IMAGE="${UDT_BUILDER_IMAGE:-udt-builder:8.3.2}"
-          if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-            echo "::error::udt-builder image '$IMAGE' not on this runner." >&2; exit 1
-          fi
-          VER="${GITHUB_REF_NAME}"
-          ARCH="$(uname -m)"; OS="$(uname -s | tr 'A-Z' 'a-z')"; case "$OS" in *linux*) OS=linux ;; esac
-          case "$(printf '\1\2' | od -An -tx2 | tr -d ' \n')" in
-            0201*) ENDIAN=le ;; 0102*) ENDIAN=be ;; *) ENDIAN=le ;;
-          esac
-          # Native code -> os+arch-locked binary; name mirrors the registry key
-          # (base = package name with '/'->'_') so the release webhook maps it.
-          BASE="mvx-lang_curses-$VER-udt-$OS-$ARCH-$ENDIAN"
-          # Compile udt-callc/*.c -> .o in a staged copy and drop the .c (the
-          # client links the object without a compiler), then tar the package.
-          docker run --rm -e BASE="$BASE" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
-            -v "$PWD":/src -w /src "$IMAGE" bash -lc '
-              set -e
-              rm -rf /tmp/stage && mkdir -p /tmp/stage
-              cp -a . /tmp/stage/ && rm -rf /tmp/stage/.git /tmp/stage/.github
-              for c in /tmp/stage/udt-callc/*.c; do gcc -m64 -fPIC -O2 -c "$c" -o "${c%.c}.o"; rm -f "$c"; done
-              tar czf "/src/$BASE.tar.gz" -C /tmp/stage .
-              chown "$HOST_UID:$HOST_GID" "/src/$BASE.tar.gz"
-            '
-          test -f "$BASE.tar.gz"
-          sha256sum "$BASE.tar.gz" > "$BASE.tar.gz.sha256"
-          echo "tarball=$BASE.tar.gz" >> "$GITHUB_OUTPUT"
-          echo "checksum=$BASE.tar.gz.sha256" >> "$GITHUB_OUTPUT"
-
-      - name: Publish the udt binary asset
-        uses: softprops/action-gh-release@v3
+      - uses: actions/checkout@v5
+      - uses: mvx-lang/mv-package-registry/.github/actions/udt-build@main
         with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            ${{ steps.build.outputs.tarball }}
-            ${{ steps.build.outputs.checksum }}
-          fail_on_unmatched_files: true
+          package: mvx-lang/curses
