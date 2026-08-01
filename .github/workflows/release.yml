@@ -3,8 +3,8 @@
 # GitHub release assets.  The package registry indexes them via its release
 # webhook (it hosts nothing).  Asset names mirror the registry's artifact key
 # (<name>-<ver>-<suffix>, base = package name '/'->'_'):
-#   source                      -> mv-lang_curses-<ver>-source.tar.gz
-#   udt binary (linux/x86_64,le)-> mv-lang_curses-<ver>-udt-linux-x86_64-le.tar.gz
+#   source                      -> mvx-lang_curses-<ver>-source.tar.gz
+#   udt binary (linux/x86_64,le)-> mvx-lang_curses-<ver>-udt-linux-x86_64-le.tar.gz
 # Copyright (C) 2026 Gordon Heydon.  GPL-2.0-only.
 #
 # udt_curses is UniData-only (ncurses via CallC), so there is no mvx binary.
@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           VER="${GITHUB_REF_NAME}"
-          BASE="mv-lang_curses-$VER-source"
+          BASE="mvx-lang_curses-$VER-source"
           tar czf "/tmp/$BASE.tar.gz" --exclude='./.git' --exclude='./.github' .
           mv "/tmp/$BASE.tar.gz" .
           sha256sum "$BASE.tar.gz" > "$BASE.tar.gz.sha256"
@@ -75,7 +75,7 @@ jobs:
           esac
           # Native code -> os+arch-locked binary; name mirrors the registry key
           # (base = package name with '/'->'_') so the release webhook maps it.
-          BASE="mv-lang_curses-$VER-udt-$OS-$ARCH-$ENDIAN"
+          BASE="mvx-lang_curses-$VER-udt-$OS-$ARCH-$ENDIAN"
           # Compile udt-callc/*.c -> .o in a staged copy and drop the .c (the
           # client links the object without a compiler), then tar the package.
           docker run --rm -e BASE="$BASE" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \

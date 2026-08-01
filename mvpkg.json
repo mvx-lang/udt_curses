@@ -1,5 +1,5 @@
 {
-  "name": "mv-lang/curses",
+  "name": "mvx-lang/curses",
   "version": "1.0",
   "description": "ncurses terminal handling for UniData (KEYIN by name, mouse)",
   "license": "GPL-2.0-only",
