@@ -1,5 +1,5 @@
 curses
-1.0
+1.0.1
 ncurses terminal handling for UniData: KEYIN by name and mouse
 udt
 lib
