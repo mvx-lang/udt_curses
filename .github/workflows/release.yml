@@ -27,30 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-
-      - name: Package the source
-        id: pkg
-        shell: bash
-        run: |
-          set -euo pipefail
-          VER="${GITHUB_REF_NAME}"
-          BASE="mvx-lang_curses-$VER-source"
-          tar czf "/tmp/$BASE.tar.gz" --exclude='./.git' --exclude='./.github' .
-          mv "/tmp/$BASE.tar.gz" .
-          sha256sum "$BASE.tar.gz" > "$BASE.tar.gz.sha256"
-          echo "tarball=$BASE.tar.gz" >> "$GITHUB_OUTPUT"
-          echo "checksum=$BASE.tar.gz.sha256" >> "$GITHUB_OUTPUT"
-
-      - name: Publish the source asset
-        uses: softprops/action-gh-release@v3
+      - uses: mvx-lang/mvx/.github/actions/publish-source@main
         with:
-          tag_name: ${{ github.ref_name }}
-          name: udt-curses ${{ github.ref_name }}
+          package: mvx-lang/curses
+          title: udt-curses
           body: "udt_curses — ncurses terminal handling for UniData. Source + prebuilt udt binary; indexed by the package registry."
-          files: |
-            ${{ steps.pkg.outputs.tarball }}
-            ${{ steps.pkg.outputs.checksum }}
-          fail_on_unmatched_files: true
 
   # ---- udt binary: the compiled ncurses CallC bridge -------------------------
   udt-binary:
