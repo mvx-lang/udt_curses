@@ -4,5 +4,6 @@
   "description": "ncurses terminal handling for UniData (KEYIN by name, mouse)",
   "license": "GPL-2.0-only",
   "systems": ["udt"],
-  "dependencies": []
+  "dependencies": [],
+  "clibs": ["libncurses.so:>=6,<7"]
 }
