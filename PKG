@@ -3,3 +3,4 @@ curses
 ncurses terminal handling for UniData: KEYIN by name and mouse
 udt
 lib
++mvpkg
