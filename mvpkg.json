@@ -3,7 +3,14 @@
   "version": "1.0.1",
   "description": "ncurses terminal handling for UniData (KEYIN by name, mouse)",
   "license": "GPL-2.0-only",
-  "systems": ["udt"],
+  "systems": [
+    "udt"
+  ],
   "dependencies": [],
-  "clibs": ["libncurses.so:>=6,<7"]
+  "devDependencies": [
+    "mvx-lang/mvpkg"
+  ],
+  "clibs": [
+    "libncurses.so:>=6,<7"
+  ]
 }
