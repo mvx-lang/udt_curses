@@ -1,6 +1,6 @@
 {
   "name": "mvx-lang/curses",
-  "version": "1.0.1",
+  "version": "0.0.0-dev",
   "description": "ncurses terminal handling for UniData (KEYIN by name, mouse)",
   "license": "GPL-2.0-only",
   "systems": [
