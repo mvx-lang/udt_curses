@@ -38,6 +38,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # IN-TREE, BOTH MANIFESTS SAY 0.0.0-dev (#4).  Deliberately -- a number
+      # committed there can only be stale or coincidentally right, and nothing
+      # reads it: publish-source stamps the tag into the manifests it ships,
+      # and so does the registry's udt-build.  Do not bump it before a release;
+      # tag, and the tag lands in the artifact.
       - uses: mvx-lang/mvx/.github/actions/publish-source@main
         with:
           package: mvx-lang/curses
