@@ -1,0 +1,95 @@
+   PROGRAM CURSES.PROBE
+* udt_curses — CALLC.EXISTS and CURSES.AVAIL, against a cfuncdef we control.
+* Copyright (C) 2026 Gordon Heydon.  GPL-2.0-only.
+*
+* Run it in an account with the two functions cataloged:
+*
+*   UniData   BASIC BP CURSES.PROBE ; RUN BP CURSES.PROBE
+*
+* It prints FAILURES=0 when both are right.
+*
+* WHY IT WRITES $UDTHOME/bin/work/cfuncdef.  CALLC.EXISTS is DEFINED as "is
+* this name in UniData's canonical CallC definition file".  It reads that path
+* and nothing else, because a live probe is impossible -- a CallC to an
+* unregistered function aborts the whole program, which is the reason the
+* function exists.  So testing it means controlling that file.
+*
+* THE FIXTURE IS WRITTEN FROM SCRATCH, NOT APPENDED TO.  A host that already
+* has CURSINIT registered would make the "absent" cases pass or fail for
+* reasons that have nothing to do with the code under test.  Every case below
+* is asserted against a file this program just wrote, and the original is put
+* back at the end.
+*
+* BOTH DIRECTIONS, ALWAYS.  A probe stuck on one answer is the failure mode:
+* answer 0 for everything and every caller silently takes the fallback path
+* for ever; answer 1 for everything and callers CallC into a function that is
+* not there, which aborts them.  Neither shows up in a test that only asks
+* about a name it expects one answer for.
+   DEFFUN CALLC.EXISTS(A)
+   DEFFUN CURSES.AVAIL(A)
+   FAILS = 0
+   NL = CHAR(10)
+*
+   UDT = GETENV("UDTHOME")
+   IF UDT = "" THEN
+      PRINT "UDTHOME is not set -- there is no cfuncdef to control, not passing"
+      PRINT "FAILURES=1"
+      STOP
+   END
+   CFD = UDT : "/bin/work/cfuncdef"
+   OSREAD ORIG FROM CFD ELSE ORIG = ""
+*
+* A minimal well-formed cfuncdef: the three section markers install.sh writes,
+* and no functions between them.
+   BASE = "$$FUN" : NL : "$$OBJ" : NL : "$$LIB" : NL
+   PROBE = "$$FUN" : NL : "ZZPROBEFN:string:1:string" : NL : "$$OBJ" : NL : "$$LIB" : NL
+   CURSED = "$$FUN" : NL : "CURSINIT:string:1:string" : NL : "$$OBJ" : NL : "$$LIB" : NL
+*
+* CAN WE WRITE IT AT ALL?  Everything below rests on that, and a test that
+* cannot lay its own fixture has measured nothing -- so say so and fail,
+* rather than reporting whatever the host happened to contain.
+   OSWRITE BASE ON CFD
+   OSREAD CHK FROM CFD ELSE CHK = ""
+   IF CHK # BASE THEN
+      PRINT "cannot write " : CFD : " -- no fixture, so nothing below is a test"
+      PRINT "FAILURES=1"
+      STOP
+   END
+*
+   OK = (CALLC.EXISTS("ZZPROBEFN") = 0)
+   IF NOT(OK) THEN FAILS += 1
+   PRINT "1 absent name is not found    ok=" : OK
+*
+   OSWRITE PROBE ON CFD
+   OK = (CALLC.EXISTS("ZZPROBEFN") = 1)
+   IF NOT(OK) THEN FAILS += 1
+   PRINT "2 registered name is found    ok=" : OK
+*
+* Re-reads the file rather than answering from the first call.  Without this
+* case, 1 and 2 would both pass on a function that cached its first answer.
+   OSWRITE BASE ON CFD
+   OK = (CALLC.EXISTS("ZZPROBEFN") = 0)
+   IF NOT(OK) THEN FAILS += 1
+   PRINT "3 gone again after rewrite    ok=" : OK
+*
+* An exact match on the name, not a prefix: CURS must not match CURSINIT, or
+* every CURS* probe would answer for every other one.
+   OSWRITE CURSED ON CFD
+   OK = (CALLC.EXISTS("CURS") = 0)
+   IF NOT(OK) THEN FAILS += 1
+   PRINT "4 a prefix is not a match     ok=" : OK
+*
+   OK = (CURSES.AVAIL("") = 1)
+   IF NOT(OK) THEN FAILS += 1
+   PRINT "5 AVAIL sees CURSINIT         ok=" : OK
+*
+   OSWRITE BASE ON CFD
+   OK = (CURSES.AVAIL("") = 0)
+   IF NOT(OK) THEN FAILS += 1
+   PRINT "6 AVAIL says no without it    ok=" : OK
+*
+* Put the host back as it was.  If there was no cfuncdef to begin with this
+* leaves an empty one, which is what a UniData with no CallC contributions
+* has anyway.
+   OSWRITE ORIG ON CFD
+   PRINT "FAILURES=" : FAILS

@@ -1,0 +1,147 @@
+# udt_curses — what can be checked on every push and PR.
+# Copyright (C) 2026 Gordon Heydon.  GPL-2.0-only (see LICENSE).
+#
+# WHY THIS EXISTS (#6).  There was no ci.yml at all: nightly.yml runs on a
+# schedule and release.yml on a tag, so a pull request here was checked by
+# nothing.  Demonstrated rather than supposed -- the manifest change in #4
+# merged with zero checks, while the identical change in json ran five and in
+# mapfield eight.
+#
+# CURSES LOOKS UNTESTABLE ON A RUNNER AND MOSTLY IS: CURSES.DEMO wants a
+# terminal, and a CI job has none.  But the two programs most worth protecting
+# do not want one.  CALLC.EXISTS is a FILE probe -- it reads UniData's
+# cfuncdef and answers without invoking anything, precisely because a CallC to
+# an unregistered function aborts the whole program -- and CURSES.AVAIL is a
+# one-line wrapper over it.  Those are what the udt job exercises, in both
+# directions, against a cfuncdef the test writes itself.
+#
+# THEY ARE ALSO THE PROGRAMS THAT ANSWER FOR install.sh.  A caller asks
+# CURSES.AVAIL() whether the bridge is there; if that answer is wrong, a
+# program either silently takes the fallback path for ever or CallCs into
+# something that is not there and dies.
+name: ci
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ---- what a plain ubuntu runner can answer ---------------------------------
+  source:
+    name: source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # THE MANIFESTS MUST AGREE WITH EACH OTHER, which needs no tag: handing
+      # manifest-version.sh the version out of mvpkg.json asserts agreement,
+      # not anything about a release.  The tag is stamped into every staged
+      # artifact (mvx#363), so both files say 0.0.0-dev in the tree.
+      - name: The manifests agree with each other
+        run: |
+          set -eu
+          want=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+                   mvpkg.json | head -1)
+          [ -n "$want" ] || { echo "::error::mvpkg.json has no version"; exit 1; }
+          echo "mvpkg.json declares $want -- checking PKG against it"
+          sh tests/manifest-version.sh "$want"
+
+      - name: Lint the shell
+        run: |
+          set -eu
+          n=0
+          for f in build-udt.sh install.sh tests/manifest-version.sh; do
+            [ -f "$f" ] || { echo "::error::$f is missing"; exit 1; }
+            n=$((n + 1))
+          done
+          # A COUNT, because the list above is hardcoded and a new script added
+          # without a line here would be linted by nothing -- the same silence
+          # this workflow exists to end.
+          found=$(find . -name '*.sh' -not -path './.git/*' | wc -l)
+          [ "$found" -eq "$n" ] || {
+            echo "::error::$found .sh files in the tree, $n in the list above"
+            find . -name '*.sh' -not -path './.git/*' | sed 's/^/  /'
+            exit 1; }
+          echo "shellchecking $n scripts"
+          shellcheck -S warning build-udt.sh install.sh tests/manifest-version.sh
+
+      - name: Install the ncurses headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libncurses-dev
+
+      # AND IT IS ncurses 6 THAT IS REQUIRED, which this check is what pins.
+      # curscb.c uses BUTTON5_PRESSED -- the wheel-down event, which only
+      # exists at NCURSES_MOUSE_VERSION 2.  Compiled against the older curses
+      # on a mac it fails with `use of undeclared identifier BUTTON5_PRESSED`,
+      # and against ncurses 6 it is clean.  That is the evidence behind
+      # mvpkg.json's `libncurses.so:>=6,<7`, and without this step nothing
+      # holds the source and the constraint together.
+      #
+      # -Wall -Wextra REPORT, they do not fail: this runner's gcc is not the
+      # compiler the source has been read by, so a clean baseline has not been
+      # established and -Werror here would turn a first run red about style.
+      # Establishing that baseline and adding -Werror is the follow-up; what
+      # this step asserts today is that the translation unit still compiles.
+      - name: The CallC bridge compiles
+        run: |
+          set -eu
+          cc -fsyntax-only -Wall -Wextra udt-callc/curscb.c
+          echo "curscb.c compiles against libncurses-dev $(dpkg-query -W -f='${Version}' libncurses-dev)"
+
+  # ---- the BASIC, in a real UniData account ----------------------------------
+  # CALLC.EXISTS and CURSES.AVAIL only, because they are the two that answer
+  # without a terminal.  The test writes its own cfuncdef so that neither
+  # answer can come from whatever the builder image happens to have installed.
+  udt:
+    name: udt
+    runs-on: [self-hosted, linux, udt]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: mvx-lang/mv-package-registry/.github/actions/setup-udt@main
+      - uses: mvx-lang/mv-package-registry/.github/actions/mv-package-test@main
+        with:
+          platform: udt
+          sources: BP/CALLC.EXISTS BP/CURSES.AVAIL
+          test: tests/CURSES.PROBE
+          cases: 6
+
+  # ---- the workflows themselves, statically ----------------------------------
+  # Ported from json's, which carries the two things about actionlint that are
+  # easy to get wrong.  release.yml's shell stages a package and asserts a
+  # tarball's layout, and nothing has looked at it.
+  lint-workflows:
+    name: lint-workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # SHELLCHECK MUST BE HERE, AND actionlint WILL NOT SAY SO.  It runs the
+      # shell checks only when shellcheck is on PATH and is silent when it is
+      # absent -- it simply checks less, and the job goes green having checked
+      # nothing.  GitHub's images ship it; this notices the day one stops.
+      - name: "shellcheck is present, so the shell in run: blocks is checked too"
+        run: |
+          set -eu
+          command -v shellcheck >/dev/null || {
+            echo "::error::no shellcheck on PATH -- actionlint would skip every"
+            echo "::error::run: block silently.  Install it in this job."
+            exit 1
+          }
+          shellcheck --version | sed -n '2p'
+
+      # PINNED, not @latest: a linter that changes under us turns an unrelated
+      # push red.  `go install` at a tag also gets module checksum verification
+      # from the Go checksum database, which a curl|sh installer does not.
+      - name: Lint every workflow
+        env:
+          ACTIONLINT_VERSION: v1.7.12
+        run: |
+          set -eu
+          go install "github.com/rhysd/actionlint/cmd/actionlint@$ACTIONLINT_VERSION"
+          "$(go env GOPATH)/bin/actionlint" -color
