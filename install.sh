@@ -57,6 +57,10 @@ CF="-I$UDTHOME/bin/include -m64 -DUV_64PORT -DU2_64_BUILD -fPIC -DLINUX9 \
 for c in callcf interfunc efs_init funchead; do gcc $CF -c $c.c -o $c.o; done
 
 $SUDO cp -p "$LIB" "$LIB.prev" 2>/dev/null || true
+# SPLITTING IS THE POINT, so SC2046 is disabled rather than satisfied: LIBS
+# holds one linker flag per line, contributed by the packages staged above, and
+# they have to reach gcc as separate arguments.  Quoting makes them one.
+# shellcheck disable=SC2046
 gcc -m64 -shared -fPIC -z muldefs $(tr '\n' ' ' < LIBS) -L/lib64 -L/usr/lib64 \
     funchead.o interfunc.o callcf.o efs_init.o $OBJPATHS libuvic.a \
     /lib64/libglib-2.0.so.0 -lm -lncurses -lrt /lib64/libcrypt.so.1 \

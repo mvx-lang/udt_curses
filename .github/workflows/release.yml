@@ -33,8 +33,24 @@ permissions:
   contents: write
 
 jobs:
+  # ci.yml runs this on every push and pull request, but not on a TAG -- and a
+  # tag is the one push where shipping manifests that disagree is permanent.
+  # curl, json, mapfield and curl-cmd each gate their release the same way (#6).
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: The manifests agree with each other
+        run: |
+          set -eu
+          want=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+                   mvpkg.json | head -1)
+          [ -n "$want" ] || { echo "::error::mvpkg.json has no version"; exit 1; }
+          sh tests/manifest-version.sh "$want"
+
   # ---- source package: BASIC + the CallC bridge source (builds on install) ---
   source:
+    needs: [manifests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -53,7 +69,19 @@ jobs:
   # Builds in the licensed udt-builder container on the self-hosted `udt` runner.
   # The shared udt-build action does the scaffolding (image check, artifact key,
   # container run, tar, publish); build-udt.sh stages this package's release.
+  # needs: [source] -- for TWO reasons, neither of them ordering for its own
+  # sake.  First, a gate that only one publishing job waits for is not a gate:
+  # without this, udt-binary would upload a binary built from manifests the
+  # `manifests` job had just rejected.  Second, both publishing jobs CREATE the
+  # release as a side effect of uploading to it, so jobs starting together each
+  # try to create it -- one wins and the loser fails with
+  # `Validation Failed: {"code":"already_exists","field":"tag_name"}`, leaving a
+  # stray draft beside the tag.  On mv_package#66 the job it killed was the one
+  # others needed, and the release shipped with half its artifacts.  `source`
+  # alone creates it; the rest upload into it.  curl's release.yml carries the
+  # same edge for the same reason.
   udt-binary:
+    needs: [source]
     runs-on: [self-hosted, linux, udt]
     steps:
       - uses: actions/checkout@v5
